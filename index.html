@@ -1,0 +1,335 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RESCENE RATING</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;padding:25px;
+ background:#fff7fb;color:#30232c;
+ font-family:Arial,sans-serif;
+}
+header{text-align:center;padding:30px 10px}
+h1{font-size:42px;margin:10px}
+h1 span{color:#f16da8}
+.sub{color:#997d8d}
+.wrap{max-width:950px;margin:auto}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.stat,.item{
+ background:white;border:1px solid #f3dce8;
+ border-radius:16px;padding:17px;
+}
+.stat strong{display:block;font-size:25px;margin-top:8px}
+.tabs{display:flex;gap:8px;margin:25px 0 15px}
+button{
+ cursor:pointer;border:0;border-radius:20px;
+ padding:10px 17px;background:#ffe2ef;color:#a94378;
+}
+button.active{background:#f16da8;color:white}
+.toolbar{display:flex;gap:8px;margin-bottom:18px}
+input[type=search],select{
+ padding:11px;border:1px solid #f1d4e2;
+ border-radius:10px;background:white;
+}
+input[type=search]{flex:1;min-width:0}
+.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.item h3{margin:0 0 7px}
+.meta{font-size:12px;color:#a18d99}
+.score{font-size:24px;color:#e65e9c;font-weight:bold}
+.rate-row{display:flex;align-items:center;gap:8px;margin-top:15px}
+.rate{width:100px;accent-color:#f16da8}
+.rate-num{font-size:12px;font-weight:bold}
+.clear{font-size:11px;padding:6px 9px}
+.empty{text-align:center;padding:30px;color:#997d8d}
+.actions{text-align:right;margin-top:20px}
+@media(max-width:600px){
+ .cards{grid-template-columns:1fr}
+ .stats{gap:6px}
+ .stat{padding:12px}
+ .stat strong{font-size:19px}
+}
+</style>
+</head>
+<body>
+<header>
+ <div>THE MUZE ENTERTAINMENT</div>
+ <h1>RESCENE <span>RATING</span></h1>
+ <div class="sub">리센느 앨범 & 수록곡 평점 기록</div>
+</header>
+
+<main class="wrap">
+ <section class="stats">
+  <div class="stat">앨범 평균<strong id="albumAvg">—</strong></div>
+  <div class="stat">곡 평균<strong id="songAvg">—</strong></div>
+  <div class="stat">평가 항목<strong id="ratedCount">0</strong></div>
+ </section>
+
+ <nav class="tabs">
+  <button class="active" data-tab="albums">앨범별 평점</button>
+  <button data-tab="songs">곡별 평점</button>
+ </nav>
+
+ <div class="toolbar">
+  <input id="search" type="search" placeholder="앨범 또는 곡 검색">
+  <select id="sort">
+   <option value="release">발매순</option>
+   <option value="high">높은 평점순</option>
+   <option value="low">낮은 평점순</option>
+   <option value="name">이름순</option>
+  </select>
+  <select id="filter">
+   <option value="all">전체</option>
+   <option value="rated">평가 완료</option>
+   <option value="unrated">미평가</option>
+  </select>
+ </div>
+
+ <h2 id="listTitle">앨범 평가</h2>
+ <section id="list" class="cards"></section>
+
+ <div class="actions">
+  <button id="export">평점 백업</button>
+  <button id="reset">초기화</button>
+ </div>
+</main>
+
+<script>
+const releases=[
+{id:"yoyo",title:"YoYo",date:"2024.02.29",tracks:["YoYo"]},
+{id:"rescene",title:"Re:Scene",date:"2024.03.26",tracks:["YoYo","UhUh"]},
+{id:"counting",title:"Counting Star",date:"2024.06.26",tracks:["Counting Star","Counting Star (Inst.)"]},
+{id:"yoyojp",title:"YoYo (Japanese Ver.)",date:"2024.08.16",tracks:["YoYo (Japanese Ver.)"]},
+{id:"scenedrome",title:"SCENEDROME",date:"2024.08.27",tracks:["Lucky you","LOVE ATTACK","New World","Pinball"]},
+{id:"uhuhjp",title:"UhUh (Japanese Ver.)",date:"2024.12.04",tracks:["UhUh (Japanese Ver.)"]},
+{id:"glowup",title:"Glow Up",date:"2025.02.05",tracks:["CRASH","Glow Up","Going on","In my lotion","Cotton Candy"]},
+{id:"glowupen",title:"Glow Up (English Version)",date:"2025.02.17",tracks:["Glow Up (English Version)"]},
+{id:"dearest",title:"Dearest",date:"2025.07.02",tracks:["Deja Vu","Mood"]},
+{id:"bambam",title:"The First Night With The Duke OST",date:"2025.06.12",tracks:["BamBamBam"]},
+{id:"lovefreq",title:"Love Frequency",date:"2025.09.17",tracks:["Love Frequency"]},
+{id:"lipbomb",title:"lip bomb",date:"2025.11.25",tracks:["Heart Drop","Bloom","Love Echo","Hello XO","MVP"]},
+{id:"pinballjp",title:"Pinball Japanese Ver.",date:"2026.01.21",tracks:["Pinball (Japanese Ver.)"]},
+{id:"busyboy",title:"Busy Boy",date:"2026.02.27",tracks:["Busy Boy","Busy Boy (Inst.)"]},
+{id:"higher",title:"Higher",date:"2026.02.27",tracks:["Higher"]},
+{id:"busyremix",title:"Busy Boy (Galantis Remix)",date:"2026.03.12",tracks:["Busy Boy (Galantis Remix)"]},
+{id:"runaway",title:"Runaway",date:"2026.04.08",tracks:["Runaway"]},
+{id:"prettygirl",title:"Pretty Girl",date:"2026.07.08",tracks:["Pretty Girl"]}
+];
+
+const KEY="rescene-rating-v1";
+let ratings={};
+try{ratings=JSON.parse(localStorage.getItem(KEY)||"{}")}catch(e){}
+let tab="albums";
+
+const $=id=>document.getElementById(id);
+const get=id=>ratings[id]??"";
+
+function save(){
+ localStorage.setItem(KEY,JSON.stringify(ratings));
+}
+
+function allTracks(){
+ return releases.flatMap(r=>r.tracks.map((t,i)=>({
+  id:"t:"+r.id+":"+i,
+  name:t,album:r.title,date:r.date
+ })));
+}
+
+function average(arr){
+ return arr.length?
+ (arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1):"—";
+}
+
+function updateStats(){
+ const a=releases.map(r=>get("a:"+r.id))
+ .filter(v=>v!=="").map(Number);
+
+ const s=allTracks().map(t=>get(t.id))
+ .filter(v=>v!=="").map(Number);
+
+ $("albumAvg").textContent=average(a);
+ $("songAvg").textContent=average(s);
+ $("ratedCount").textContent=a.length+s.length;
+}
+
+function sortItems(items,score,name,date){
+ const mode=$("sort").value;
+ return [...items].sort((a,b)=>{
+  if(mode==="high"||mode==="low"){
+   let x=score(a),y=score(b);
+   x=x===""?-1:Number(x);
+   y=y===""?-1:Number(y);
+   return mode==="high"?y-x:x-y;
+  }
+  if(mode==="name")return name(a).localeCompare(name(b));
+  return date(b).localeCompare(date(a));
+ });
+}
+
+function matches(text,id){
+ const q=$("search").value.trim().toLowerCase();
+ const v=get(id);
+ const f=$("filter").value;
+
+ return (!q||text.toLowerCase().includes(q))
+ &&(f==="all"||(f==="rated"&&v!=="")
+ ||(f==="unrated"&&v===""));
+}
+
+function ratingControl(id){
+ const v=get(id);
+
+ return `
+ <div class="rate-row">
+  <label>평점</label>
+  <input class="rate" type="range" min="0" max="10"
+   step="0.5" value="${v===""?0:v}" data-id="${id}">
+  <span class="rate-num">
+   ${v===""?"미평가":Number(v).toFixed(1)+"점"}
+  </span>
+  <button class="clear" data-clear="${id}">초기화</button>
+ </div>`;
+}
+
+function renderAlbums(){
+ const items=sortItems(
+  releases,
+  r=>get("a:"+r.id),
+  r=>r.title,
+  r=>r.date
+ );
+
+ const html=items.filter(r=>
+  matches(r.title,"a:"+r.id)
+ ).map(r=>{
+  const score=get("a:"+r.id);
+
+  return `
+  <article class="item">
+   <div style="display:flex;justify-content:space-between">
+    <div>
+     <h3>${r.title}</h3>
+     <div class="meta">${r.date} · ${r.tracks.length}곡</div>
+    </div>
+    <div class="score">
+     ${score===""?"—":Number(score).toFixed(1)}
+     <small>/10</small>
+    </div>
+   </div>
+   ${ratingControl("a:"+r.id)}
+  </article>`;
+ }).join("");
+
+ $("list").innerHTML=html||
+ '<div class="empty">검색 결과가 없습니다.</div>';
+}
+
+function renderSongs(){
+ let items=sortItems(
+  allTracks(),
+  t=>get(t.id),
+  t=>t.name,
+  t=>t.date
+ );
+
+ const html=items.filter(t=>
+  matches(t.name+" "+t.album,t.id)
+ ).map(t=>{
+  const v=get(t.id);
+
+  return `
+  <article class="item">
+   <div style="display:flex;justify-content:space-between">
+    <div>
+     <h3>${t.name}</h3>
+     <div class="meta">${t.album} · ${t.date}</div>
+    </div>
+    <div class="score">
+     ${v===""?"—":Number(v).toFixed(1)}
+     <small>/10</small>
+    </div>
+   </div>
+   ${ratingControl(t.id)}
+  </article>`;
+ }).join("");
+
+ $("list").innerHTML=html||
+ '<div class="empty">검색 결과가 없습니다.</div>';
+}
+
+function render(){
+ updateStats();
+ $("listTitle").textContent=
+ tab==="albums"?"앨범 평가":"곡 평가";
+
+ if(tab==="albums")renderAlbums();
+ else renderSongs();
+}
+
+document.querySelectorAll(".tabs button").forEach(b=>{
+ b.addEventListener("click",()=>{
+  tab=b.dataset.tab;
+  document.querySelectorAll(".tabs button")
+  .forEach(x=>x.classList.toggle("active",x===b));
+  render();
+ });
+});
+
+$("search").addEventListener("input",render);
+$("sort").addEventListener("change",render);
+$("filter").addEventListener("change",render);
+
+$("list").addEventListener("input",e=>{
+ if(!e.target.matches(".rate"))return;
+
+ const id=e.target.dataset.id;
+ const value=Number(e.target.value);
+
+ ratings[id]=value;
+ save();
+
+ e.target.parentElement.querySelector(".rate-num")
+ .textContent=value.toFixed(1)+"점";
+
+ e.target.closest(".item").querySelector(".score")
+ .innerHTML=value.toFixed(1)+"<small>/10</small>";
+
+ updateStats();
+});
+
+$("list").addEventListener("click",e=>{
+ const id=e.target.dataset.clear;
+ if(!id)return;
+
+ delete ratings[id];
+ save();
+ render();
+});
+
+$("reset").addEventListener("click",()=>{
+ if(confirm("모든 평점을 초기화할까요?")){
+  ratings={};
+  localStorage.removeItem(KEY);
+  render();
+ }
+});
+
+$("export").addEventListener("click",()=>{
+ const blob=new Blob(
+  [JSON.stringify(ratings,null,2)],
+  {type:"application/json"}
+ );
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement("a");
+ a.href=url;
+ a.download="rescene-ratings-backup.json";
+ a.click();
+ URL.revokeObjectURL(url);
+});
+
+render();
+</script>
+</body>
+</html>
